@@ -341,7 +341,7 @@ private class ObservableStorage<ObservedType>: ObservableObject where ObservedTy
                 configuration: Realm.Configuration? = nil,
                 filter: NSPredicate? = nil,
                 sortDescriptor: SortDescriptor? = nil) {
-        self.storage.configuration = configuration
+        self.storage.configuration = configuration ?? Environment(\.realmConfiguration).wrappedValue
         self.filter = filter
         self.sortDescriptor = sortDescriptor
     }
