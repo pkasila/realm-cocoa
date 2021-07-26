@@ -284,14 +284,16 @@ private class ObservableStorage<ObservedType>: ObservableObject where ObservedTy
 @propertyWrapper public struct ObservedResults<ResultType>: DynamicProperty, BoundCollection where ResultType: Object & ObjectKeyIdentifiable {
     private class Storage: ObservableStorage<Results<ResultType>> {
         private func didSet() {
-            /// A base value to reset the state of the query if a user reassigns the `filter` or `sortDescriptor`
-            value = try! Realm(configuration: configuration ?? Realm.Configuration.defaultConfiguration).objects(ResultType.self)
+            if !waitForUpdate {
+                /// A base value to reset the state of the query if a user reassigns the `filter` or `sortDescriptor`
+                value = try! Realm(configuration: configuration ?? Realm.Configuration.defaultConfiguration).objects(ResultType.self)
 
-            if let sortDescriptor = sortDescriptor {
-                value = value.sorted(byKeyPath: sortDescriptor.keyPath, ascending: sortDescriptor.ascending)
-            }
-            if let filter = filter {
-                value = value.filter(filter)
+                if let sortDescriptor = sortDescriptor {
+                    value = value.sorted(byKeyPath: sortDescriptor.keyPath, ascending: sortDescriptor.ascending)
+                }
+                if let filter = filter {
+                    value = value.filter(filter)
+                }
             }
         }
 
@@ -312,6 +314,8 @@ private class ObservableStorage<ObservedType>: ObservableObject where ObservedTy
                 didSet()
             }
         }
+        
+        var waitForUpdate: Bool = false
     }
 
     @Environment(\.realmConfiguration) var configuration
@@ -336,12 +340,23 @@ private class ObservableStorage<ObservedType>: ObservableObject where ObservedTy
     public var projectedValue: Self {
         return self
     }
-    /// :nodoc:
+    
+    /// Initializer for ObservedResults
+    /// - Parameters:
+    ///   - type: Object class type which will be fetched
+    ///   - configuration: strictly specified `Realm.Configuration`
+    ///   - filter: NSPredicate to filter objects
+    ///   - sortDescriptor: used for object sorting
+    ///   - waitForUpdate: specified as `true` if you want to wait until the view will be updated by `Environment` with `EnvironmentValues.realmConfiguration`
     public init(_ type: ResultType.Type,
                 configuration: Realm.Configuration? = nil,
                 filter: NSPredicate? = nil,
-                sortDescriptor: SortDescriptor? = nil) {
-        self.storage.configuration = configuration ?? Environment(\.realmConfiguration).wrappedValue
+                sortDescriptor: SortDescriptor? = nil,
+                waitForUpdate: Bool = false) {
+        self.storage.waitForUpdate = waitForUpdate
+        if !self.storage.waitForUpdate {
+            self.storage.configuration = configuration
+        }
         self.filter = filter
         self.sortDescriptor = sortDescriptor
     }
@@ -349,6 +364,7 @@ private class ObservableStorage<ObservedType>: ObservableObject where ObservedTy
     public mutating func update() {
         // When the view updates, it will inject the @Environment
         // into the propertyWrapper
+        storage.waitForUpdate = false
         if storage.configuration == nil || storage.configuration != configuration {
             storage.configuration = configuration
         }
